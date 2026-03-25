@@ -5,6 +5,7 @@ import queue
 import os
 import re
 from flask import Flask, render_template, Response, abort, request as flask_request
+from pyrogram import Client, filters as pyro_filters
 
 # ==============================
 # 1. Config
@@ -52,10 +53,6 @@ def start_pyrogram():
         print("[Pyrogram] API_ID, API_HASH বা BOT_TOKEN সেট নেই — বট চালু হবে না।")
         return
 
-    from pyrogram import Client, filters
-    from pyrogram.errors import FloodWait
-    import time
-
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     pyrogram_loop = loop
@@ -68,7 +65,7 @@ def start_pyrogram():
         sleep_threshold=60,
     )
 
-    @client.on_message(filters.video | filters.document)
+    @client.on_message(pyro_filters.video | pyro_filters.document)
     async def handle_video(c, message):
         media = message.video or message.document
         if not media:

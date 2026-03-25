@@ -41,3 +41,6 @@ run = ["bash", "-c", "python main.py"]
 
 [userenv.shared]
 BOT_TOKEN = "8266219983:AAH8fTUQb1X886hjHX9Xhshq-HI5Ettv9Fs"
+API_ID = "27862243"
+API_HASH = "ee9da220a7e483b12eec57466a63438f"
+CHANNEL_ID = "-1002872277979"
