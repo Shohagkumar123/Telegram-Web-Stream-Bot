@@ -149,9 +149,16 @@ def start_bot():
         except Exception as e:
             print(f"[Bot] Reply error: {e}")
 
+    # পুরনো pending update সব clear করো
+    try:
+        bot.get_updates(offset=-1)
+        print("[Bot] Pending updates cleared.")
+    except Exception as e:
+        print(f"[Bot] Clear error: {e}")
+
     while True:
         try:
-            bot.polling(none_stop=True, timeout=30, long_polling_timeout=20)
+            bot.polling(none_stop=True, skip_pending=True, timeout=30, long_polling_timeout=20)
         except Exception as e:
             print(f"[Bot] Polling crashed, restarting: {e}")
             import time
