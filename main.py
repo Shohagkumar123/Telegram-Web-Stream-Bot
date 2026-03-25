@@ -13,15 +13,24 @@ cursor.execute("""
 CREATE TABLE IF NOT EXISTS videos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT,
-    file_id TEXT
+    file_id TEXT,
+    file_path TEXT
 )
 """)
+
+try:
+    cursor.execute("ALTER TABLE videos ADD COLUMN file_path TEXT")
+except Exception:
+    pass
+
 conn.commit()
 
 # ==============================
 # 2. Flask Website Setup
 # ==============================
 app = Flask(__name__)
+
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 @app.route("/")
 def home():
@@ -32,8 +41,6 @@ def home():
 # ==============================
 # 3. Bot Setup (optional - requires BOT_TOKEN)
 # ==============================
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-
 def run_bot():
     if not BOT_TOKEN:
         print("BOT_TOKEN not set - Telegram bot will not start")
@@ -46,9 +53,18 @@ def run_bot():
         def handle_video(message):
             file_id = message.video.file_id
             title = message.caption if message.caption else "Untitled Video"
-            cursor.execute("INSERT INTO videos (title, file_id) VALUES (?, ?)", (title, file_id))
+
+            file_info = bot.get_file(file_id)
+            file_path = file_info.file_path
+
+            cursor.execute(
+                "INSERT INTO videos (title, file_id, file_path) VALUES (?, ?, ?)",
+                (title, file_id, file_path)
+            )
             conn.commit()
-            bot.reply_to(message, f"Video saved with title: {title}")
+
+            stream_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
+            bot.reply_to(message, f"✅ ভিডিও সেভ হয়েছে!\nশিরোনাম: {title}\nStream URL: {stream_url}")
 
         bot.polling(none_stop=True)
     except Exception as e:

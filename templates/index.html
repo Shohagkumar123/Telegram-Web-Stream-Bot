@@ -8,11 +8,19 @@
 
 {% for video in videos %}
     <h4>{{ video[1] }}</h4>
-    <video width="480" controls>
-        <source src="https://api.telegram.org/file/bot{{ token }}/{{ video[2] }}">
-    </video>
+    {% if video[3] %}
+        <video width="480" controls>
+            <source src="https://api.telegram.org/file/bot{{ token }}/{{ video[3] }}">
+        </video>
+    {% else %}
+        <p><em>ভিডিও লোড হচ্ছে না (পুরনো ভিডিও, file_path নেই)</em></p>
+    {% endif %}
     <br><br>
 {% endfor %}
+
+{% if not videos %}
+    <p>এখনো কোনো ভিডিও সেভ হয়নি। বটে ভিডিও পাঠান!</p>
+{% endif %}
 
 </body>
 </html>
