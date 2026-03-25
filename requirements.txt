@@ -2,4 +2,5 @@ pyrogram
 tgcrypto
 flask
 gunicorn
+pyTelegramBotAPI
 requests

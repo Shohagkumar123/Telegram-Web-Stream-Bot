@@ -4,6 +4,7 @@ import asyncio
 import queue
 import os
 import re
+import requests as req
 from flask import Flask, render_template, Response, abort, request as flask_request
 from pyrogram import Client, filters as pyro_filters
 
@@ -13,10 +14,10 @@ from pyrogram import Client, filters as pyro_filters
 BOT_TOKEN  = os.environ.get("BOT_TOKEN")
 API_ID     = os.environ.get("API_ID")
 API_HASH   = os.environ.get("API_HASH")
-CHANNEL_ID = os.environ.get("CHANNEL_ID")  # e.g. @mychannel or -100123456789
+CHANNEL_ID = os.environ.get("CHANNEL_ID")  # e.g. -100123456789 or @username
 
 # ==============================
-# 2. Database Setup (SQLite)
+# 2. Database Setup
 # ==============================
 conn   = sqlite3.connect("videos.db", check_same_thread=False)
 cursor = conn.cursor()
@@ -31,17 +32,15 @@ CREATE TABLE IF NOT EXISTS videos (
     file_size       INTEGER
 )
 """)
-
 for col in ["file_path TEXT", "channel_msg_id INTEGER", "file_size INTEGER"]:
     try:
         cursor.execute(f"ALTER TABLE videos ADD COLUMN {col}")
     except Exception:
         pass
-
 conn.commit()
 
 # ==============================
-# 3. Pyrogram Setup
+# 3. Pyrogram (শুধু streaming-এর জন্য)
 # ==============================
 pyrogram_client = None
 pyrogram_loop   = None
@@ -50,7 +49,7 @@ def start_pyrogram():
     global pyrogram_client, pyrogram_loop
 
     if not all([API_ID, API_HASH, BOT_TOKEN]):
-        print("[Pyrogram] API_ID, API_HASH বা BOT_TOKEN সেট নেই — বট চালু হবে না।")
+        print("[Pyrogram] API_ID/API_HASH/BOT_TOKEN নেই — streaming সীমিত থাকবে।")
         return
 
     loop = asyncio.new_event_loop()
@@ -58,60 +57,80 @@ def start_pyrogram():
     pyrogram_loop = loop
 
     client = Client(
-        "bot_session",
+        "stream_session",
         api_id=int(API_ID),
         api_hash=API_HASH,
         bot_token=BOT_TOKEN,
         sleep_threshold=60,
     )
 
-    @client.on_message(pyro_filters.video | pyro_filters.document)
-    async def handle_video(c, message):
-        media = message.video or message.document
-        if not media:
-            return
-
-        title = message.caption if message.caption else "Untitled Video"
-
-        # Channel-এ forward করে message ID সেভ করি
-        if CHANNEL_ID:
-            try:
-                forwarded = await c.forward_messages(CHANNEL_ID, message.chat.id, message.id)
-                channel_msg_id = forwarded.id
-            except Exception as e:
-                print(f"[Bot] Forward error: {e}")
-                channel_msg_id = None
-        else:
-            channel_msg_id = None
-
-        file_size = getattr(media, "file_size", 0)
-
-        cursor.execute(
-            "INSERT INTO videos (title, file_id, channel_msg_id, file_size) VALUES (?, ?, ?, ?)",
-            (title, media.file_id, channel_msg_id, file_size)
-        )
-        conn.commit()
-
-        size_mb = round(file_size / 1024 / 1024, 2) if file_size else "?"
-        await message.reply(
-            f"✅ ভিডিও সেভ হয়েছে!\n"
-            f"শিরোনাম: {title}\n"
-            f"সাইজ: {size_mb} MB\n"
-            f"{'✅ Channel-এ সেভ হয়েছে' if channel_msg_id else '⚠️ Channel সেভ হয়নি (CHANNEL_ID সেট করুন)'}"
-        )
-
     async def run():
         await client.start()
-        pyrogram_client = client
         globals()["pyrogram_client"] = client
-        print("[Pyrogram] বট চালু হয়েছে।")
-        await asyncio.Future()  # run forever
+        print("[Pyrogram] Streaming client চালু।")
+        await asyncio.Future()
 
     loop.run_until_complete(run())
 
+# ==============================
+# 4. Telegram Bot (telebot — বট + channel forward)
+# ==============================
+def start_bot():
+    if not BOT_TOKEN:
+        print("[Bot] BOT_TOKEN নেই।")
+        return
+    try:
+        import telebot
+        bot = telebot.TeleBot(BOT_TOKEN)
+
+        @bot.message_handler(content_types=['video', 'document'])
+        def handle_video(message):
+            media   = message.video or message.document
+            if not media:
+                return
+
+            file_id   = media.file_id
+            file_size = getattr(media, "file_size", 0)
+            title     = message.caption if message.caption else "Untitled Video"
+
+            # Channel-এ forward করো (Bot API HTTP — peer resolution দরকার নেই)
+            channel_msg_id = None
+            if CHANNEL_ID:
+                try:
+                    fwd = bot.forward_message(CHANNEL_ID, message.chat.id, message.message_id)
+                    channel_msg_id = fwd.message_id
+                except Exception as e:
+                    print(f"[Bot] Forward error: {e}")
+
+            # file_path বের করো (Bot API getFile — ≤20MB ভিডিওতে কাজ করে)
+            file_path = None
+            try:
+                info = bot.get_file(file_id)
+                file_path = info.file_path
+            except Exception:
+                pass  # 20MB+ হলে file_path পাওয়া যাবে না, streaming Pyrogram করবে
+
+            cursor.execute(
+                "INSERT INTO videos (title, file_id, file_path, channel_msg_id, file_size) VALUES (?,?,?,?,?)",
+                (title, file_id, file_path, channel_msg_id, file_size)
+            )
+            conn.commit()
+
+            size_mb = round(file_size / 1024 / 1024, 2) if file_size else "?"
+            channel_status = "✅ Channel-এ সেভ হয়েছে" if channel_msg_id else "⚠️ Channel-এ সেভ হয়নি"
+            bot.reply_to(message,
+                f"✅ ভিডিও সেভ হয়েছে!\n"
+                f"শিরোনাম: {title}\n"
+                f"সাইজ: {size_mb} MB\n"
+                f"{channel_status}"
+            )
+
+        bot.polling(none_stop=True, timeout=60)
+    except Exception as e:
+        print(f"[Bot] Error: {e}")
 
 # ==============================
-# 4. Flask App
+# 5. Flask App
 # ==============================
 flask_app = Flask(__name__)
 
@@ -125,42 +144,31 @@ def home():
 @flask_app.route("/stream/<int:video_id>")
 def stream_video(video_id):
     cursor.execute(
-        "SELECT channel_msg_id, file_path, file_size FROM videos WHERE id = ?",
+        "SELECT file_id, file_path, channel_msg_id, file_size FROM videos WHERE id = ?",
         (video_id,)
     )
     row = cursor.fetchone()
     if not row:
         abort(404)
 
-    channel_msg_id, file_path, file_size = row
+    file_id, file_path, channel_msg_id, file_size = row
     file_size = file_size or 0
 
     # Range header parse
-    range_header = flask_request.headers.get("Range", None)
-    start, end = 0, file_size - 1 if file_size > 0 else 0
-
+    range_header = flask_request.headers.get("Range")
+    start = 0
     if range_header:
         m = re.match(r"bytes=(\d+)-(\d*)", range_header)
         if m:
             start = int(m.group(1))
-            if m.group(2):
-                end = int(m.group(2))
 
-    length = (end - start + 1) if file_size > 0 else None
-
-    # ── Pyrogram streaming (channel, large files) ──────────────────
-    if channel_msg_id and pyrogram_client and pyrogram_loop and CHANNEL_ID:
+    # ── Pyrogram streaming (file_id দিয়ে — যেকোনো সাইজ) ──────────
+    if pyrogram_client and pyrogram_loop and file_id:
         chunk_q = queue.Queue(maxsize=30)
 
         async def _download():
             try:
-                ch = int(CHANNEL_ID) if str(CHANNEL_ID).lstrip("-").isdigit() else CHANNEL_ID
-                msg = await pyrogram_client.get_messages(ch, channel_msg_id)
-                media = msg.video or msg.document
-                if not media:
-                    chunk_q.put(None)
-                    return
-                async for chunk in pyrogram_client.iter_download(media, offset=start):
+                async for chunk in pyrogram_client.iter_download(file_id, offset=start):
                     chunk_q.put(chunk)
             except Exception as e:
                 print(f"[Stream] Pyrogram error: {e}")
@@ -176,24 +184,23 @@ def stream_video(video_id):
                     break
                 yield chunk
 
+        end = file_size - 1 if file_size > 0 else 0
         headers = {
             "Content-Type":        "video/mp4",
             "Content-Disposition": "inline",
             "Accept-Ranges":       "bytes",
         }
         if file_size > 0:
-            headers["Content-Length"] = str(length)
+            headers["Content-Length"] = str(file_size - start)
             headers["Content-Range"]  = f"bytes {start}-{end}/{file_size}"
 
-        status = 206 if range_header else 200
-        return Response(generate_pyrogram(), status=status, headers=headers)
+        return Response(generate_pyrogram(), status=206 if range_header else 200, headers=headers)
 
-    # ── Fallback: Telegram Bot API proxy (files ≤ 20 MB) ───────────
+    # ── Fallback: Bot API proxy (≤20MB) ────────────────────────────
     if file_path and BOT_TOKEN:
-        import requests as req
-        tg_url  = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
-        headers = {"Range": range_header} if range_header else {}
-        tg_resp = req.get(tg_url, headers=headers, stream=True)
+        tg_url       = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
+        req_headers  = {"Range": range_header} if range_header else {}
+        tg_resp      = req.get(tg_url, headers=req_headers, stream=True)
 
         def generate_fallback():
             for chunk in tg_resp.iter_content(chunk_size=8192):
@@ -212,13 +219,13 @@ def stream_video(video_id):
 
         return Response(generate_fallback(), status=tg_resp.status_code, headers=resp_headers)
 
-    abort(404)
-
+    abort(503)
 
 # ==============================
-# 5. Start Everything
+# 6. Start Everything
 # ==============================
 threading.Thread(target=start_pyrogram, daemon=True).start()
+threading.Thread(target=start_bot,      daemon=True).start()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
