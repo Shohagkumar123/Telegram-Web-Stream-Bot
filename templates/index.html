@@ -3,33 +3,42 @@
 <head>
     <title>Telegram Video Site</title>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
-        h2 { color: #333; }
-        .video-card { background: white; border-radius: 10px; padding: 15px; margin-bottom: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-        .video-card h4 { margin: 0 0 10px 0; color: #444; }
-        video { width: 100%; border-radius: 8px; }
-        .empty { color: #999; text-align: center; margin-top: 50px; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background: #1a1a2e; color: #eee; padding: 20px; }
+        h2 { text-align: center; margin-bottom: 24px; font-size: 1.8rem; color: #e0e0ff; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; max-width: 1200px; margin: 0 auto; }
+        .card { background: #16213e; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.4); }
+        .card video { width: 100%; display: block; background: #000; }
+        .card-body { padding: 12px 15px; }
+        .card-body h4 { font-size: 1rem; color: #c0c0ff; margin-bottom: 4px; }
+        .card-body .meta { font-size: 0.8rem; color: #888; }
+        .empty { text-align: center; color: #666; margin-top: 80px; font-size: 1.1rem; }
     </style>
 </head>
 <body>
-<h2>🎬 My Videos</h2>
+<h2>🎬 My Video Library</h2>
 
+<div class="grid">
 {% for video in videos %}
-<div class="video-card">
-    <h4>{{ video[1] }}</h4>
-    {% if video[3] %}
+<div class="card">
+    {% if video[4] or video[3] %}
         <video controls preload="metadata">
             <source src="/stream/{{ video[0] }}" type="video/mp4">
-            আপনার ব্রাউজার ভিডিও সাপোর্ট করে না।
         </video>
-    {% else %}
-        <p><em>ভিডিও পাওয়া যাচ্ছে না (পুরনো ভিডিও)।</em></p>
     {% endif %}
+    <div class="card-body">
+        <h4>{{ video[1] }}</h4>
+        <span class="meta">
+            {% if video[5] %}{{ "%.1f"|format(video[5] / 1024 / 1024) }} MB{% endif %}
+            {% if video[4] %} &bull; ✅ Channel{% endif %}
+        </span>
+    </div>
 </div>
 {% endfor %}
+</div>
 
 {% if not videos %}
-    <p class="empty">এখনো কোনো ভিডিও সেভ হয়নি। বটে ভিডিও পাঠান!</p>
+<p class="empty">এখনো কোনো ভিডিও নেই। বটে ভিডিও পাঠান!</p>
 {% endif %}
 
 </body>

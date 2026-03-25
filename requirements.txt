@@ -1,3 +1,5 @@
-pyTelegramBotAPI
+pyrogram
+tgcrypto
 flask
 gunicorn
+requests
