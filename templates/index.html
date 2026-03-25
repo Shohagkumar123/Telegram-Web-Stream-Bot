@@ -2,24 +2,34 @@
 <html>
 <head>
     <title>Telegram Video Site</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+        h2 { color: #333; }
+        .video-card { background: white; border-radius: 10px; padding: 15px; margin-bottom: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+        .video-card h4 { margin: 0 0 10px 0; color: #444; }
+        video { width: 100%; border-radius: 8px; }
+        .empty { color: #999; text-align: center; margin-top: 50px; }
+    </style>
 </head>
 <body>
-<h2>My Videos</h2>
+<h2>🎬 My Videos</h2>
 
 {% for video in videos %}
+<div class="video-card">
     <h4>{{ video[1] }}</h4>
     {% if video[3] %}
-        <video width="480" controls>
-            <source src="https://api.telegram.org/file/bot{{ token }}/{{ video[3] }}">
+        <video controls preload="metadata">
+            <source src="/stream/{{ video[0] }}" type="video/mp4">
+            আপনার ব্রাউজার ভিডিও সাপোর্ট করে না।
         </video>
     {% else %}
-        <p><em>ভিডিও লোড হচ্ছে না (পুরনো ভিডিও, file_path নেই)</em></p>
+        <p><em>ভিডিও পাওয়া যাচ্ছে না (পুরনো ভিডিও)।</em></p>
     {% endif %}
-    <br><br>
+</div>
 {% endfor %}
 
 {% if not videos %}
-    <p>এখনো কোনো ভিডিও সেভ হয়নি। বটে ভিডিও পাঠান!</p>
+    <p class="empty">এখনো কোনো ভিডিও সেভ হয়নি। বটে ভিডিও পাঠান!</p>
 {% endif %}
 
 </body>
