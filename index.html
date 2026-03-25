@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Telegram Video Site</title>
+</head>
+<body>
+<h2>My Videos</h2>
+
+{% for video in videos %}
+    <h4>{{ video[1] }}</h4>
+    <video width="480" controls>
+        <source src="https://api.telegram.org/file/bot{{ token }}/{{ video[2] }}">
+    </video>
+    <br><br>
+{% endfor %}
+
+</body>
+</html>
