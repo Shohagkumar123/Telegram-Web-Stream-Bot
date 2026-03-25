@@ -85,6 +85,10 @@ def start_bot():
 
         @bot.message_handler(content_types=['video', 'document'])
         def handle_video(message):
+            # Channel post থেকে আসা update ignore করো — না হলে infinite loop হয়
+            if message.chat.type == 'channel':
+                return
+
             media   = message.video or message.document
             if not media:
                 return
@@ -115,15 +119,24 @@ def start_bot():
                 (title, file_id, file_path, channel_msg_id, file_size)
             )
             conn.commit()
+            video_db_id = cursor.lastrowid
 
             size_mb = round(file_size / 1024 / 1024, 2) if file_size else "?"
             channel_status = "✅ Channel-এ সেভ হয়েছে" if channel_msg_id else "⚠️ Channel-এ সেভ হয়নি"
-            bot.reply_to(message,
+
+            domain = os.environ.get("REPLIT_DEV_DOMAIN", "")
+            stream_url = f"https://{domain}/stream/{video_db_id}" if domain else ""
+
+            reply_text = (
                 f"✅ ভিডিও সেভ হয়েছে!\n"
                 f"শিরোনাম: {title}\n"
                 f"সাইজ: {size_mb} MB\n"
                 f"{channel_status}"
             )
+            if stream_url:
+                reply_text += f"\n🔗 Stream: {stream_url}"
+
+            bot.reply_to(message, reply_text)
 
         bot.polling(none_stop=True, timeout=60)
     except Exception as e:
@@ -164,37 +177,47 @@ def stream_video(video_id):
 
     # ── Pyrogram streaming (file_id দিয়ে — যেকোনো সাইজ) ──────────
     if pyrogram_client and pyrogram_loop and file_id:
-        chunk_q = queue.Queue(maxsize=30)
+        import tempfile, io
+
+        done_event = threading.Event()
+        result_holder = [None]
 
         async def _download():
             try:
-                async for chunk in pyrogram_client.iter_download(file_id, offset=start):
-                    chunk_q.put(chunk)
+                data = await pyrogram_client.download_media(file_id, in_memory=True)
+                result_holder[0] = data
             except Exception as e:
                 print(f"[Stream] Pyrogram error: {e}")
             finally:
-                chunk_q.put(None)
+                done_event.set()
 
         asyncio.run_coroutine_threadsafe(_download(), pyrogram_loop)
+        done_event.wait(timeout=120)
 
-        def generate_pyrogram():
-            while True:
-                chunk = chunk_q.get()
-                if chunk is None:
-                    break
-                yield chunk
+        if result_holder[0] is not None:
+            buf = result_holder[0]
+            buf.seek(start)
+            data_bytes = buf.read()
+            total = start + len(data_bytes)
 
-        end = file_size - 1 if file_size > 0 else 0
-        headers = {
-            "Content-Type":        "video/mp4",
-            "Content-Disposition": "inline",
-            "Accept-Ranges":       "bytes",
-        }
-        if file_size > 0:
-            headers["Content-Length"] = str(file_size - start)
-            headers["Content-Range"]  = f"bytes {start}-{end}/{file_size}"
+            headers = {
+                "Content-Type":        "video/mp4",
+                "Content-Disposition": "inline",
+                "Accept-Ranges":       "bytes",
+                "Content-Length":      str(len(data_bytes)),
+            }
+            if range_header:
+                end = (file_size - 1) if file_size > 0 else total - 1
+                headers["Content-Range"] = f"bytes {start}-{end}/{file_size if file_size else total}"
 
-        return Response(generate_pyrogram(), status=206 if range_header else 200, headers=headers)
+            def generate_pyrogram():
+                offset = 0
+                chunk_size = 8192
+                while offset < len(data_bytes):
+                    yield data_bytes[offset:offset + chunk_size]
+                    offset += chunk_size
+
+            return Response(generate_pyrogram(), status=206 if range_header else 200, headers=headers)
 
     # ── Fallback: Bot API proxy (≤20MB) ────────────────────────────
     if file_path and BOT_TOKEN:
