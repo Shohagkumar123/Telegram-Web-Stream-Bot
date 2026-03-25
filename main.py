@@ -72,7 +72,13 @@ def start_bot():
     # ── Video handler ─────────────────────────────────────────────
     @bot.message_handler(content_types=['video', 'document'])
     def handle_video(message):
-        if message.chat.type == 'channel':
+        # শুধু private chat থেকে আসা video accept করো
+        # group/supergroup/channel থেকে আসা সব ignore করো
+        if message.chat.type != 'private':
+            return
+
+        # Forwarded message হলেও ignore করো
+        if message.forward_date:
             return
 
         media = message.video or message.document
