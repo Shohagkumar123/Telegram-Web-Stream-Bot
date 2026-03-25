@@ -1,18 +1,15 @@
 import sqlite3
 import threading
-import asyncio
 import os
 import re
+import time
 import requests as req
 from flask import Flask, render_template, Response, abort, request as flask_request
-from pyrogram import Client, filters as pyro_filters
 
 # ==============================
 # 1. Config
 # ==============================
 BOT_TOKEN  = os.environ.get("BOT_TOKEN", "")
-API_ID     = os.environ.get("API_ID", "")
-API_HASH   = os.environ.get("API_HASH", "")
 CHANNEL_ID = os.environ.get("CHANNEL_ID", "")
 
 # ==============================
@@ -21,7 +18,7 @@ CHANNEL_ID = os.environ.get("CHANNEL_ID", "")
 conn    = sqlite3.connect("videos.db", check_same_thread=False)
 db_lock = threading.Lock()
 
-def db_execute(sql, params=()):
+def db_query(sql, params=()):
     with db_lock:
         cur = conn.cursor()
         cur.execute(sql, params)
@@ -29,60 +26,26 @@ def db_execute(sql, params=()):
         return cur
 
 with db_lock:
-    cur = conn.cursor()
-    cur.execute("""
+    c = conn.cursor()
+    c.execute("""
     CREATE TABLE IF NOT EXISTS videos (
-        id              INTEGER PRIMARY KEY AUTOINCREMENT,
-        title           TEXT,
-        file_id         TEXT,
-        file_path       TEXT,
-        channel_msg_id  INTEGER,
-        file_size       INTEGER
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        title          TEXT,
+        file_id        TEXT,
+        file_path      TEXT,
+        channel_msg_id INTEGER,
+        file_size      INTEGER
     )
     """)
     for col in ["file_path TEXT", "channel_msg_id INTEGER", "file_size INTEGER"]:
         try:
-            cur.execute(f"ALTER TABLE videos ADD COLUMN {col}")
+            c.execute(f"ALTER TABLE videos ADD COLUMN {col}")
         except Exception:
             pass
     conn.commit()
 
 # ==============================
-# 3. Pyrogram Client (শুধু বট চালানোর জন্য)
-# ==============================
-pyrogram_loop   = None
-pyrogram_client = None
-
-def start_pyrogram():
-    global pyrogram_loop, pyrogram_client
-
-    if not all([API_ID, API_HASH, BOT_TOKEN]):
-        print("[Pyrogram] credentials নেই — চালু হবে না।")
-        return
-
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    pyrogram_loop = loop
-
-    client = Client(
-        "stream_session",
-        api_id=int(API_ID),
-        api_hash=API_HASH,
-        bot_token=BOT_TOKEN,
-        sleep_threshold=60,
-    )
-
-    async def run():
-        await client.start()
-        pyrogram_client = client
-        globals()["pyrogram_client"] = client
-        print("[Pyrogram] Client চালু।")
-        await asyncio.Future()
-
-    loop.run_until_complete(run())
-
-# ==============================
-# 4. Telegram Bot (telebot)
+# 3. Telegram Bot (telebot only)
 # ==============================
 def start_bot():
     if not BOT_TOKEN:
@@ -92,9 +55,23 @@ def start_bot():
     import telebot
     bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 
+    # ── সব pending update drain করো ──────────────────────────────
+    print("[Bot] Clearing all pending updates...")
+    try:
+        while True:
+            updates = bot.get_updates(limit=100, timeout=3)
+            if not updates:
+                break
+            max_id = max(u.update_id for u in updates)
+            bot.get_updates(offset=max_id + 1, limit=1)
+            print(f"[Bot] Cleared up to update_id {max_id}...")
+        print("[Bot] Queue সম্পূর্ণ পরিষ্কার!")
+    except Exception as e:
+        print(f"[Bot] Clear error: {e}")
+
+    # ── Video handler ─────────────────────────────────────────────
     @bot.message_handler(content_types=['video', 'document'])
     def handle_video(message):
-        # Channel post থেকে আসা update ignore
         if message.chat.type == 'channel':
             return
 
@@ -115,7 +92,7 @@ def start_bot():
             except Exception as e:
                 print(f"[Bot] Forward error: {e}")
 
-        # Bot API getFile (≤20MB-এ কাজ করে)
+        # file_path (≤20MB ফাইলে পাওয়া যাবে)
         file_path = None
         try:
             info = bot.get_file(file_id)
@@ -123,7 +100,7 @@ def start_bot():
         except Exception:
             pass
 
-        cur = db_execute(
+        cur = db_query(
             "INSERT INTO videos (title, file_id, file_path, channel_msg_id, file_size) VALUES (?,?,?,?,?)",
             (title, file_id, file_path, channel_msg_id, file_size)
         )
@@ -132,7 +109,7 @@ def start_bot():
         size_mb = round(file_size / 1024 / 1024, 2) if file_size else "?"
         channel_status = "✅ Channel-এ সেভ হয়েছে" if channel_msg_id else "⚠️ Channel-এ সেভ হয়নি"
 
-        domain = os.environ.get("REPLIT_DEV_DOMAIN", "")
+        domain     = os.environ.get("REPLIT_DEV_DOMAIN", "")
         stream_url = f"https://{domain}/stream/{video_db_id}" if domain else ""
 
         reply_text = (
@@ -149,23 +126,16 @@ def start_bot():
         except Exception as e:
             print(f"[Bot] Reply error: {e}")
 
-    # পুরনো pending update সব clear করো
-    try:
-        bot.get_updates(offset=-1)
-        print("[Bot] Pending updates cleared.")
-    except Exception as e:
-        print(f"[Bot] Clear error: {e}")
-
+    # ── Polling loop ──────────────────────────────────────────────
     while True:
         try:
             bot.polling(none_stop=True, skip_pending=True, timeout=30, long_polling_timeout=20)
         except Exception as e:
-            print(f"[Bot] Polling crashed, restarting: {e}")
-            import time
+            print(f"[Bot] Polling crashed, restarting in 5s: {e}")
             time.sleep(5)
 
 # ==============================
-# 5. Flask App
+# 4. Flask App
 # ==============================
 flask_app = Flask(__name__)
 
@@ -200,83 +170,41 @@ def stream_video(video_id):
             if m.group(2):
                 end = int(m.group(2))
 
-    # ── Bot API proxy (সবসময় চেষ্টা করো) ──────────────────────────
-    if file_path and BOT_TOKEN:
-        tg_url      = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
-        req_headers = {"Range": range_header} if range_header else {}
+    if not file_path or not BOT_TOKEN:
+        abort(503)
 
-        try:
-            tg_resp = req.get(tg_url, headers=req_headers, stream=True, timeout=30)
+    tg_url      = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
+    req_headers = {"Range": range_header} if range_header else {}
 
-            def generate():
-                for chunk in tg_resp.iter_content(chunk_size=65536):
-                    if chunk:
-                        yield chunk
+    try:
+        tg_resp = req.get(tg_url, headers=req_headers, stream=True, timeout=30)
 
-            resp_headers = {
-                "Content-Type":        "video/mp4",
-                "Content-Disposition": "inline",
-                "Accept-Ranges":       "bytes",
-            }
-            if "Content-Length" in tg_resp.headers:
-                resp_headers["Content-Length"] = tg_resp.headers["Content-Length"]
-            if "Content-Range" in tg_resp.headers:
-                resp_headers["Content-Range"] = tg_resp.headers["Content-Range"]
-
-            return Response(generate(), status=tg_resp.status_code, headers=resp_headers)
-
-        except Exception as e:
-            print(f"[Stream] Bot API error: {e}")
-
-    # ── Pyrogram fallback (>20MB ফাইলের জন্য) ─────────────────────
-    if pyrogram_client and pyrogram_loop and file_id:
-        import queue as q_module
-        chunk_q     = q_module.Queue(maxsize=50)
-        done_event  = threading.Event()
-
-        async def _dl():
-            try:
-                buf = await pyrogram_client.download_media(file_id, in_memory=True)
-                if buf:
-                    buf.seek(start)
-                    while True:
-                        data = buf.read(65536)
-                        if not data:
-                            break
-                        chunk_q.put(data)
-            except Exception as e:
-                print(f"[Stream] Pyrogram fallback error: {e}")
-            finally:
-                chunk_q.put(None)
-
-        asyncio.run_coroutine_threadsafe(_dl(), pyrogram_loop)
-
-        def generate_py():
-            while True:
-                chunk = chunk_q.get(timeout=60)
-                if chunk is None:
-                    break
-                yield chunk
+        def generate():
+            for chunk in tg_resp.iter_content(chunk_size=65536):
+                if chunk:
+                    yield chunk
 
         resp_headers = {
             "Content-Type":        "video/mp4",
             "Content-Disposition": "inline",
             "Accept-Ranges":       "bytes",
         }
-        if file_size > 0:
-            resp_headers["Content-Length"] = str(file_size - start)
-            resp_headers["Content-Range"]  = f"bytes {start}-{end}/{file_size}"
+        if "Content-Length" in tg_resp.headers:
+            resp_headers["Content-Length"] = tg_resp.headers["Content-Length"]
+        if "Content-Range" in tg_resp.headers:
+            resp_headers["Content-Range"] = tg_resp.headers["Content-Range"]
 
-        return Response(generate_py(), status=206 if range_header else 200, headers=resp_headers)
+        return Response(generate(), status=tg_resp.status_code, headers=resp_headers)
 
-    abort(503)
+    except Exception as e:
+        print(f"[Stream] Error: {e}")
+        abort(503)
 
 
 # ==============================
-# 6. Start Everything
+# 5. Start
 # ==============================
-threading.Thread(target=start_pyrogram, daemon=True).start()
-threading.Thread(target=start_bot,      daemon=True).start()
+threading.Thread(target=start_bot, daemon=True).start()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
