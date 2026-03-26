@@ -77,10 +77,6 @@ def start_bot():
         if message.chat.type != 'private':
             return
 
-        # Forwarded message হলেও ignore করো
-        if message.forward_date:
-            return
-
         media = message.video or message.document
         if not media:
             return
