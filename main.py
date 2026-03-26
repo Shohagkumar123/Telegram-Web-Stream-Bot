@@ -715,6 +715,3 @@ def stream_video(video_id):
 threading.Thread(target=start_admin_bot, daemon=True).start()
 threading.Thread(target=start_user_bot,  daemon=True).start()
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    flask_app.run(host="0.0.0.0", port=port, threaded=True)
