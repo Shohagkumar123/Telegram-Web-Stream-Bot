@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ video[1] or "Video" }} – VideoHub</title>
+  <meta property="og:title"       content="{{ video[1] or 'VideoHub' }}" />
+  <meta property="og:type"        content="video.other" />
+  <meta property="og:description" content="{{ video[2] or 'Watch on VideoHub' }}" />
+  <style>
+    :root {
+      --bg: #0f0f0f;
+      --surface: #1a1a1a;
+      --surface2: #242424;
+      --border: #333;
+      --text: #f1f1f1;
+      --text2: #aaa;
+      --accent: #ff0000;
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; min-height: 100vh; }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 20px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: 8px; text-decoration: none; }
+    .logo-icon { background: var(--accent); color: #fff; width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: bold; }
+    .logo-text { font-size: 20px; font-weight: 700; color: var(--text); }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 24px;
+      max-width: 1400px;
+      margin: 24px auto;
+      padding: 0 20px;
+    }
+
+    /* Player */
+    .player-section {}
+    .player-wrap {
+      background: #000;
+      border-radius: var(--radius);
+      overflow: hidden;
+      aspect-ratio: 16/9;
+      width: 100%;
+    }
+    video {
+      width: 100%;
+      height: 100%;
+      display: block;
+      background: #000;
+    }
+    .video-title {
+      font-size: 20px;
+      font-weight: 700;
+      margin: 16px 0 8px;
+      line-height: 1.4;
+    }
+    .video-meta {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      flex-wrap: wrap;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 14px;
+    }
+    .meta-item { font-size: 13px; color: var(--text2); }
+    .cat-badge {
+      background: var(--surface2);
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      text-decoration: none;
+    }
+    .cat-badge:hover { background: var(--accent); color: #fff; }
+    .description {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      font-size: 14px;
+      color: var(--text2);
+      line-height: 1.7;
+    }
+
+    /* Share button */
+    .share-row { display: flex; gap: 10px; margin: 14px 0; }
+    .share-btn {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 16px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background .2s;
+    }
+    .share-btn:hover { background: var(--border); }
+    .share-btn.copied { background: #1a7a1a; border-color: #2aa02a; }
+
+    /* Sidebar */
+    .sidebar-title { font-size: 16px; font-weight: 600; margin-bottom: 14px; }
+    .related-list { display: flex; flex-direction: column; gap: 12px; }
+    .related-card { display: flex; gap: 10px; text-decoration: none; color: inherit; border-radius: 8px; padding: 6px; transition: background .2s; }
+    .related-card:hover { background: var(--surface); }
+    .rel-thumb {
+      width: 120px; flex-shrink: 0;
+      aspect-ratio: 16/9;
+      background: linear-gradient(135deg, #1a1a2e, #0f3460);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+    .rel-info { flex: 1; min-width: 0; }
+    .rel-title { font-size: 13px; font-weight: 600; line-height: 1.3; margin-bottom: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .rel-meta { font-size: 11px; color: var(--text2); }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 600px) {
+      header { padding: 0 12px; }
+      .logo-text { display: none; }
+      .layout { padding: 0 12px; margin: 12px auto; gap: 16px; }
+      .video-title { font-size: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <a class="logo" href="/">
+    <div class="logo-icon">▶</div>
+    <span class="logo-text">VideoHub</span>
+  </a>
+</header>
+
+<div class="layout">
+  <!-- Left: Player -->
+  <div class="player-section">
+    <div class="player-wrap">
+      <video controls autoplay preload="auto" controlslist="nodownload">
+        <source src="/stream/{{ video[0] }}" type="video/mp4" />
+        আপনার ব্রাউজার ভিডিও সমর্থন করে না।
+      </video>
+    </div>
+
+    <h1 class="video-title">{{ video[1] or "Untitled Video" }}</h1>
+
+    <div class="video-meta">
+      <span class="meta-item">👁 {{ video[4] + 1 }} ভিউ</span>
+      {% if video[3] %}<span class="meta-item">📦 {{ "%.1f"|format(video[3]/1024/1024) }} MB</span>{% endif %}
+      {% if video[5] %}<span class="meta-item">📅 {{ video[5][:10] }}</span>{% endif %}
+      {% if video[6] %}
+      <a href="/?cat=" class="cat-badge">📁 {{ video[6] }}</a>
+      {% endif %}
+    </div>
+
+    <div class="share-row">
+      <button class="share-btn" onclick="copyLink()">🔗 লিংক কপি করুন</button>
+    </div>
+
+    {% if video[2] %}
+    <div class="description">{{ video[2] }}</div>
+    {% endif %}
+  </div>
+
+  <!-- Right: Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-title">🎬 আরো ভিডিও</div>
+    {% if related %}
+    <div class="related-list">
+      {% for r in related %}
+      <a class="related-card" href="/video/{{ r[0] }}">
+        <div class="rel-thumb">🎬</div>
+        <div class="rel-info">
+          <div class="rel-title">{{ r[1] or "Untitled Video" }}</div>
+          <div class="rel-meta">
+            👁 {{ r[3] }} ভিউ
+            {% if r[2] %} · {{ "%.1f"|format(r[2]/1024/1024) }} MB{% endif %}
+          </div>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p style="color:var(--text2);font-size:13px;">কোনো ভিডিও নেই।</p>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+function copyLink() {
+  navigator.clipboard.writeText(window.location.href).then(() => {
+    const btn = document.querySelector('.share-btn');
+    btn.textContent = '✅ কপি হয়েছে!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = '🔗 লিংক কপি করুন'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+</script>
+</body>
+</html>

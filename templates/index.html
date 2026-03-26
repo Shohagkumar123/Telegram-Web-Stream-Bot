@@ -1,45 +1,243 @@
 <!DOCTYPE html>
-<html>
+<html lang="bn">
 <head>
-    <title>Telegram Video Site</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: Arial, sans-serif; background: #1a1a2e; color: #eee; padding: 20px; }
-        h2 { text-align: center; margin-bottom: 24px; font-size: 1.8rem; color: #e0e0ff; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; max-width: 1200px; margin: 0 auto; }
-        .card { background: #16213e; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.4); }
-        .card video { width: 100%; display: block; background: #000; }
-        .card-body { padding: 12px 15px; }
-        .card-body h4 { font-size: 1rem; color: #c0c0ff; margin-bottom: 4px; }
-        .card-body .meta { font-size: 0.8rem; color: #888; }
-        .empty { text-align: center; color: #666; margin-top: 80px; font-size: 1.1rem; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VideoHub – হোম</title>
+  <style>
+    :root {
+      --bg: #0f0f0f;
+      --surface: #1a1a1a;
+      --surface2: #242424;
+      --border: #333;
+      --text: #f1f1f1;
+      --text2: #aaa;
+      --accent: #ff0000;
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; min-height: 100vh; }
+
+    /* Header */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 20px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: 8px; text-decoration: none; }
+    .logo-icon { background: var(--accent); color: #fff; width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: bold; }
+    .logo-text { font-size: 20px; font-weight: 700; color: var(--text); }
+    .search-wrap { flex: 1; display: flex; justify-content: center; }
+    form.search-form { display: flex; gap: 0; max-width: 600px; width: 100%; }
+    form.search-form input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-right: none;
+      border-radius: 24px 0 0 24px;
+      padding: 9px 16px;
+      color: var(--text);
+      font-size: 15px;
+      outline: none;
+    }
+    form.search-form input:focus { border-color: var(--accent); }
+    form.search-form button {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-left: none;
+      border-radius: 0 24px 24px 0;
+      padding: 9px 18px;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 16px;
+    }
+    form.search-form button:hover { background: var(--border); }
+
+    /* Category tabs */
+    .cats-bar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 20px;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .cats-bar::-webkit-scrollbar { display: none; }
+    .cat-chip {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 14px;
+      border-radius: 20px;
+      text-decoration: none;
+      font-size: 13px;
+      white-space: nowrap;
+      transition: background .2s;
+    }
+    .cat-chip:hover { background: var(--border); }
+    .cat-chip.active { background: var(--text); color: var(--bg); border-color: var(--text); }
+
+    /* Main content */
+    main { padding: 20px; max-width: 1400px; margin: 0 auto; }
+    .section-title { font-size: 18px; font-weight: 600; margin-bottom: 16px; color: var(--text2); }
+    .section-title span { color: var(--text); }
+
+    /* Stats */
+    .stats-bar { display: flex; gap: 14px; margin-bottom: 24px; }
+    .stat-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 20px; flex: 1; text-align: center; }
+    .stat-num { font-size: 26px; font-weight: 700; color: var(--accent); }
+    .stat-label { font-size: 12px; color: var(--text2); margin-top: 4px; }
+
+    /* Video grid */
+    .video-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 20px;
+    }
+    .video-card { text-decoration: none; color: inherit; display: block; border-radius: var(--radius); overflow: hidden; transition: transform .2s; }
+    .video-card:hover { transform: translateY(-4px); }
+    .thumb-wrap {
+      position: relative;
+      background: #111;
+      aspect-ratio: 16/9;
+      overflow: hidden;
+      border-radius: var(--radius);
+    }
+    .thumb-placeholder {
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 52px;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    }
+    .play-overlay {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,.35);
+      opacity: 0; transition: opacity .2s;
+    }
+    .video-card:hover .play-overlay { opacity: 1; }
+    .play-btn-big {
+      width: 56px; height: 56px; background: rgba(255,0,0,.9);
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: 22px; color: #fff; padding-left: 4px;
+    }
+    .size-badge {
+      position: absolute; bottom: 8px; right: 8px;
+      background: rgba(0,0,0,.75); color: #fff;
+      font-size: 11px; padding: 2px 7px; border-radius: 4px;
+    }
+    .card-info { padding: 10px 2px 4px; }
+    .card-title { font-size: 14px; font-weight: 600; line-height: 1.4; margin-bottom: 5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .card-meta { font-size: 12px; color: var(--text2); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .cat-tag { background: var(--surface2); border-radius: 4px; padding: 1px 6px; font-size: 11px; color: var(--accent); border: 1px solid var(--accent); }
+
+    .empty { text-align: center; padding: 80px 20px; color: var(--text2); }
+    .empty .icon { font-size: 64px; margin-bottom: 16px; }
+    .empty h2 { font-size: 22px; margin-bottom: 8px; color: var(--text); }
+
+    @media (max-width: 600px) {
+      header { padding: 0 12px; gap: 10px; height: 54px; }
+      .logo-text { display: none; }
+      main { padding: 12px; }
+      .stats-bar { gap: 8px; }
+      .stat-box { padding: 10px 8px; }
+      .stat-num { font-size: 20px; }
+      .video-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+    }
+  </style>
 </head>
 <body>
-<h2>🎬 My Video Library</h2>
 
-<div class="grid">
-{% for video in videos %}
-<div class="card">
-    {% if video[4] or video[3] %}
-        <video controls preload="metadata">
-            <source src="/stream/{{ video[0] }}" type="video/mp4">
-        </video>
-    {% endif %}
-    <div class="card-body">
-        <h4>{{ video[1] }}</h4>
-        <span class="meta">
-            {% if video[5] %}{{ "%.1f"|format(video[5] / 1024 / 1024) }} MB{% endif %}
-            {% if video[4] %} &bull; ✅ Channel{% endif %}
-        </span>
-    </div>
-</div>
-{% endfor %}
-</div>
+<header>
+  <a class="logo" href="/">
+    <div class="logo-icon">▶</div>
+    <span class="logo-text">VideoHub</span>
+  </a>
+  <div class="search-wrap">
+    <form class="search-form" method="get" action="/">
+      <input type="text" name="q" placeholder="ভিডিও খুঁজুন..." value="{{ search }}" autocomplete="off" />
+      <button type="submit">🔍</button>
+    </form>
+  </div>
+</header>
 
-{% if not videos %}
-<p class="empty">এখনো কোনো ভিডিও নেই। বটে ভিডিও পাঠান!</p>
+{% if cats %}
+<div class="cats-bar">
+  <a href="/" class="cat-chip {% if not selected_cat %}active{% endif %}">🏠 সব</a>
+  {% for cat in cats %}
+  <a href="/?cat={{ cat[0] }}" class="cat-chip {% if selected_cat == cat[0]|string %}active{% endif %}">📁 {{ cat[1] }}</a>
+  {% endfor %}
+</div>
 {% endif %}
 
+<main>
+
+  {% if not search and not selected_cat %}
+  <div class="stats-bar">
+    <div class="stat-box">
+      <div class="stat-num">{{ videos|length }}</div>
+      <div class="stat-label">মোট ভিডিও</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-num">{{ videos|sum(attribute=3) }}</div>
+      <div class="stat-label">মোট ভিউ</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-num">{{ cats|length }}</div>
+      <div class="stat-label">ক্যাটাগরি</div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if videos %}
+  <div class="section-title">
+    {% if search %}
+      🔍 "<span>{{ search }}</span>" — {{ videos|length }}টি ফলাফল
+    {% elif selected_cat %}
+      📁 ক্যাটাগরি — {{ videos|length }}টি ভিডিও
+    {% else %}
+      🎬 সর্বশেষ ভিডিও
+    {% endif %}
+  </div>
+
+  <div class="video-grid">
+    {% for v in videos %}
+    <a class="video-card" href="/video/{{ v[0] }}">
+      <div class="thumb-wrap">
+        <div class="thumb-placeholder">🎬</div>
+        <div class="play-overlay"><div class="play-btn-big">▶</div></div>
+        {% if v[2] %}
+        <div class="size-badge">{{ "%.1f"|format(v[2]/1024/1024) }} MB</div>
+        {% endif %}
+      </div>
+      <div class="card-info">
+        <div class="card-title">{{ v[1] or "Untitled Video" }}</div>
+        <div class="card-meta">
+          <span>👁 {{ v[3] }}</span>
+          {% if v[5] %}<span class="cat-tag">{{ v[5] }}</span>{% endif %}
+          <span>{{ v[4][:10] if v[4] else "" }}</span>
+        </div>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+
+  {% else %}
+  <div class="empty">
+    <div class="icon">🎬</div>
+    <h2>{% if search %}কোনো ফলাফল নেই{% else %}কোনো ভিডিও নেই{% endif %}</h2>
+    <p>Bot-এ ভিডিও পাঠান — এখানে দেখাবে।</p>
+  </div>
+  {% endif %}
+
+</main>
 </body>
 </html>
