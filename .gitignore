@@ -1,0 +1,5 @@
+*.session
+*.session-journal
+videos.db
+__pycache__/
+.env
